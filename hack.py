@@ -1,14 +1,12 @@
 import argparse
 import socket
 import itertools
-import string
+import requests
 
 
-def generate_password():
-    base_list = string.ascii_lowercase + string.digits
-    for n in range(1, 5):
-        for letters in itertools.product(base_list, repeat=n):
-            yield "".join(letters)
+def get_passwords():
+    pw_str = requests.get('https://stepik.org/media/attachments/lesson/255258/passwords.txt').text
+    return pw_str.split("\r\n")
 
 
 class Connect2Server:
@@ -20,8 +18,8 @@ class Connect2Server:
         self.message_help = "Message sent to server."
         self.parser = None
         self.args = None
-        self.password_generator = generate_password()
         self.password = None
+        self.passwords = get_passwords()
 
     def connect(self):
         self.parser = argparse.ArgumentParser(description=self.description)
@@ -32,12 +30,17 @@ class Connect2Server:
         with socket.socket() as client_socket:
             client_socket.connect((self.args.ip_address, int(self.args.port)))
             correct_response = 'Connection success!'
-            response = ""
-            while response != correct_response:
-                self.password = next(self.password_generator)
-                client_socket.send(self.password.encode())
-                response = client_socket.recv(1024).decode()
-            print(self.password)
+            for pw in self.passwords:
+                pw_list = [x.lower() + x.upper() for x in pw]
+                pw_combinations = itertools.product(*pw_list)
+                for pw_combination in pw_combinations:
+                    loc_password = "".join(pw_combination)
+                    client_socket.send(loc_password.encode())
+                    response = client_socket.recv(1024).decode()
+                    if response == correct_response:
+                        self.password = loc_password
+                        print(self.password)
+                        return None
 
 
 if __name__ == '__main__':
